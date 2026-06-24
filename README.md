@@ -40,9 +40,9 @@ Go to **WooCommerce > Review Automation** and configure the following sections:
 Configure up to three review platform links (label + URL). These are inserted as clickable anchor tags using the `{review_link_1}`, `{review_link_2}`, and `{review_link_3}` placeholders.
 
 Default platforms pre-configured:
-- **Google** — `#`
-- **FeedbackCompany** — `#`
-- **Trustpilot** — `#`
+- **Google** — `https://maps.app.goo.gl/Yf3FxdxDdUpwPHdn9`
+- **FeedbackCompany** — `https://www.feedbackcompany.com/nl-nl/reviews/tapijten-kelim`
+- **Trustpilot** — `https://nl.trustpilot.com/review/tapijtenkelim.nl`
 
 ### Email 1 — Review Request
 - Sent **1 day** after the order status changes to Delivered.
@@ -148,3 +148,9 @@ The plugin stores the following meta data on orders:
 | `_ra_delivered_at`           | Unix timestamp | When the order was marked delivered |
 | `_ra_review_request_sent`    | `1`   | Set after Email 1 is sent               |
 | `_ra_review_followup_sent`   | `1`   | Set after Email 2 is sent               |
+
+---
+
+## Support
+
+For support, visit [https://tapijtenkelim.nl](https://tapijtenkelim.nl).

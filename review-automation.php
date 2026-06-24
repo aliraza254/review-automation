@@ -1,10 +1,10 @@
 <?php
 /**
  * Plugin Name: Review Automation
- * Plugin URI:  https://tapijtenkelim.nl
+ * Plugin URI:  https://github.com/aliraza254/
  * Description: Automatically sends review request emails to customers after their order is marked as Delivered by TrackShip.
  * Version:     1.0.0
- * Author:      Tapijten Kelim
+ * Author:      Muhammad Ali Raza
  * Text Domain: review-automation
  * Domain Path: /languages
  *
@@ -37,6 +37,9 @@ function ra_init() {
 
 	// Instantiate the settings class (registers admin menu & settings).
 	new RA_Settings();
+
+	// Log ALL order status changes to find the correct delivered slug.
+	add_action( 'woocommerce_order_status_changed', 'ra_log_status_change', 10, 4 );
 
 	// Hook into WooCommerce delivered status (provided by TrackShip).
 	add_action( 'woocommerce_order_status_delivered', 'ra_on_delivered', 10, 2 );
@@ -71,16 +74,35 @@ function ra_wc_missing_notice() {
 }
 
 /**
+ * Log every order status change to help identify the correct delivered slug.
+ *
+ * @param int    $order_id   Order ID.
+ * @param string $from       Previous status slug (without wc- prefix).
+ * @param string $to         New status slug (without wc- prefix).
+ * @param object $order      Order object.
+ */
+function ra_log_status_change( $order_id, $from, $to, $order ) {
+	wc_get_logger()->info(
+		sprintf( 'Order #%d status changed: %s → %s', $order_id, $from, $to ),
+		array( 'source' => 'review-automation' )
+	);
+}
+
+/**
  * Fired when an order status changes to "delivered".
  *
  * @param int      $order_id Order ID.
  * @param WC_Order $order    Order object.
  */
 function ra_on_delivered( $order_id, $order ) {
+	$logger = wc_get_logger();
+	$logger->info( sprintf( 'ra_on_delivered triggered for order #%d.', $order_id ), array( 'source' => 'review-automation' ) );
+
 	$settings = ( new RA_Settings() )->get_settings();
 
 	// Bail if the plugin is disabled.
 	if ( empty( $settings['enabled'] ) ) {
+		$logger->info( sprintf( 'Order #%d: plugin disabled, skipping.', $order_id ), array( 'source' => 'review-automation' ) );
 		return;
 	}
 
@@ -90,26 +112,49 @@ function ra_on_delivered( $order_id, $order ) {
 		$order->save();
 	}
 
-	// Schedule Email 1 (review request) — 1 day after delivery.
+	// Get configured delays.
+	$email1_delay = isset( $settings['email1_delay'] ) ? absint( $settings['email1_delay'] ) : 1;
+	$email2_delay = isset( $settings['email2_delay'] ) ? absint( $settings['email2_delay'] ) : 7;
+
+	// Handle Email 1 (review request).
 	if ( ! empty( $settings['email1_enabled'] ) ) {
-		if ( ! wp_next_scheduled( 'ra_send_review_request', array( $order_id ) ) ) {
-			wp_schedule_single_event( time() + DAY_IN_SECONDS, 'ra_send_review_request', array( $order_id ) );
-			wc_get_logger()->info(
-				sprintf( 'Order #%d: email 1 scheduled for %s.', $order_id, gmdate( 'Y-m-d H:i:s', time() + DAY_IN_SECONDS ) ),
-				array( 'source' => 'review-automation' )
-			);
+		if ( '1' !== $order->get_meta( '_ra_review_request_sent' ) ) {
+			if ( 0 === $email1_delay ) {
+				// Send immediately
+				RA_Mailer::send_review_request( $order_id );
+				$order->update_meta_data( '_ra_review_request_sent', '1' );
+				$order->save();
+				$logger->info( sprintf( 'Order #%d: email 1 sent immediately.', $order_id ), array( 'source' => 'review-automation' ) );
+			} else {
+				// Schedule
+				if ( ! wp_next_scheduled( 'ra_send_review_request', array( $order_id ) ) ) {
+					wp_schedule_single_event( time() + $email1_delay * DAY_IN_SECONDS, 'ra_send_review_request', array( $order_id ) );
+					$logger->info( sprintf( 'Order #%d: email 1 scheduled for %d days.', $order_id, $email1_delay ), array( 'source' => 'review-automation' ) );
+				} else {
+					$logger->info( sprintf( 'Order #%d: email 1 already scheduled, skipping.', $order_id ), array( 'source' => 'review-automation' ) );
+				}
+			}
+		} else {
+			$logger->info( sprintf( 'Order #%d: email 1 already sent, skipping.', $order_id ), array( 'source' => 'review-automation' ) );
 		}
+	} else {
+		$logger->info( sprintf( 'Order #%d: email 1 disabled, skipping.', $order_id ), array( 'source' => 'review-automation' ) );
 	}
 
-	// Schedule Email 2 (follow-up) — 2 days after delivery.
+	// Schedule Email 2 (follow-up).
 	if ( ! empty( $settings['email2_enabled'] ) ) {
-		if ( ! wp_next_scheduled( 'ra_send_review_followup', array( $order_id ) ) ) {
-			wp_schedule_single_event( time() + 2 * DAY_IN_SECONDS, 'ra_send_review_followup', array( $order_id ) );
-			wc_get_logger()->info(
-				sprintf( 'Order #%d: email 2 scheduled for %s.', $order_id, gmdate( 'Y-m-d H:i:s', time() + 2 * DAY_IN_SECONDS ) ),
-				array( 'source' => 'review-automation' )
-			);
+		if ( '1' !== $order->get_meta( '_ra_review_followup_sent' ) ) {
+			if ( ! wp_next_scheduled( 'ra_send_review_followup', array( $order_id ) ) ) {
+				wp_schedule_single_event( time() + $email2_delay * DAY_IN_SECONDS, 'ra_send_review_followup', array( $order_id ) );
+				$logger->info( sprintf( 'Order #%d: email 2 scheduled for %d days.', $order_id, $email2_delay ), array( 'source' => 'review-automation' ) );
+			} else {
+				$logger->info( sprintf( 'Order #%d: email 2 already scheduled, skipping.', $order_id ), array( 'source' => 'review-automation' ) );
+			}
+		} else {
+			$logger->info( sprintf( 'Order #%d: email 2 already sent, skipping.', $order_id ), array( 'source' => 'review-automation' ) );
 		}
+	} else {
+		$logger->info( sprintf( 'Order #%d: email 2 disabled, skipping.', $order_id ), array( 'source' => 'review-automation' ) );
 	}
 }
 

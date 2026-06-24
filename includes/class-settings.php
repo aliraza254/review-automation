@@ -75,9 +75,11 @@ class RA_Settings {
 			'review_link_3_label'  => 'Trustpilot',
 			'review_link_3_url'    => 'https://nl.trustpilot.com/review/tapijtenkelim.nl',
 			'email1_enabled'       => 1,
+			'email1_delay'         => 1,
 			'email1_subject'       => "How was your order? We'd love your feedback!",
 			'email1_body'          => "Hi {customer_name},\n\nYour order #{order_id} has been delivered. We hope you love it!\n\nWe'd really appreciate it if you could take a moment to leave us a review. It helps us a lot!\n\nLeave a review here:\n- Google: {review_link_1}\n- FeedbackCompany: {review_link_2}\n- Trustpilot: {review_link_3}\n\nThank you so much!\n{shop_name}",
 			'email2_enabled'       => 1,
+			'email2_delay'         => 7,
 			'email2_subject'       => 'Still time to share your experience!',
 			'email2_body'          => "Hi {customer_name},\n\nWe noticed you haven't had a chance to leave a review for order #{order_id} yet.\n\nWe'd still love to hear what you think! It only takes a minute.\n\nLeave a review here:\n- Google: {review_link_1}\n- FeedbackCompany: {review_link_2}\n- Trustpilot: {review_link_3}\n\nThanks again for shopping with us!\n{shop_name}",
 		);
@@ -233,7 +235,26 @@ class RA_Settings {
 								value="1"
 								<?php checked( 1, ! empty( $settings['email1_enabled'] ) ); ?>
 							/>
-							<label for="ra_email1_enabled"><?php esc_html_e( 'Send the initial review request email 1 day after delivery', 'review-automation' ); ?></label>
+							<label for="ra_email1_enabled"><?php esc_html_e( 'Send the initial review request email after delivery', 'review-automation' ); ?></label>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row">
+							<label for="ra_email1_delay"><?php esc_html_e( 'Send Delay (Days)', 'review-automation' ); ?></label>
+						</th>
+						<td>
+							<input
+								type="number"
+								id="ra_email1_delay"
+								name="<?php echo esc_attr( self::OPTION_KEY ); ?>[email1_delay]"
+								value="<?php echo esc_attr( isset( $settings['email1_delay'] ) ? $settings['email1_delay'] : 1 ); ?>"
+								class="small-text"
+								min="0"
+								step="1"
+							/>
+							<p class="description">
+								<?php esc_html_e( 'Number of days to wait after delivery before sending the first email (use 0 to send immediately).', 'review-automation' ); ?>
+							</p>
 						</td>
 					</tr>
 					<tr>
@@ -288,7 +309,26 @@ class RA_Settings {
 								value="1"
 								<?php checked( 1, ! empty( $settings['email2_enabled'] ) ); ?>
 							/>
-							<label for="ra_email2_enabled"><?php esc_html_e( 'Send a follow-up email 2 days after delivery if no review has been left', 'review-automation' ); ?></label>
+							<label for="ra_email2_enabled"><?php esc_html_e( 'Send a follow-up email after delivery if no review has been left', 'review-automation' ); ?></label>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row">
+							<label for="ra_email2_delay"><?php esc_html_e( 'Send Delay (Days)', 'review-automation' ); ?></label>
+						</th>
+						<td>
+							<input
+								type="number"
+								id="ra_email2_delay"
+								name="<?php echo esc_attr( self::OPTION_KEY ); ?>[email2_delay]"
+								value="<?php echo esc_attr( isset( $settings['email2_delay'] ) ? $settings['email2_delay'] : 7 ); ?>"
+								class="small-text"
+								min="1"
+								step="1"
+							/>
+							<p class="description">
+								<?php esc_html_e( 'Number of days to wait after delivery before sending the follow-up email (must be at least 1).', 'review-automation' ); ?>
+							</p>
 						</td>
 					</tr>
 					<tr>
@@ -431,11 +471,13 @@ class RA_Settings {
 
 		// Email 1.
 		$sanitized['email1_enabled'] = ! empty( $input['email1_enabled'] ) ? 1 : 0;
+		$sanitized['email1_delay']   = isset( $input['email1_delay'] ) ? absint( $input['email1_delay'] ) : 1;
 		$sanitized['email1_subject'] = isset( $input['email1_subject'] ) ? sanitize_text_field( wp_unslash( $input['email1_subject'] ) ) : '';
 		$sanitized['email1_body']    = isset( $input['email1_body'] ) ? wp_kses_post( wp_unslash( $input['email1_body'] ) ) : '';
 
 		// Email 2.
 		$sanitized['email2_enabled'] = ! empty( $input['email2_enabled'] ) ? 1 : 0;
+		$sanitized['email2_delay']   = isset( $input['email2_delay'] ) ? max( 1, absint( $input['email2_delay'] ) ) : 7;
 		$sanitized['email2_subject'] = isset( $input['email2_subject'] ) ? sanitize_text_field( wp_unslash( $input['email2_subject'] ) ) : '';
 		$sanitized['email2_body']    = isset( $input['email2_body'] ) ? wp_kses_post( wp_unslash( $input['email2_body'] ) ) : '';
 
